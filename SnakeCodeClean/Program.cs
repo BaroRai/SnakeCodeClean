@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 
@@ -8,6 +8,15 @@ namespace SnakeGame
     {
         static void Main(string[] args)
         {
+            // Nastavenie konzolového okna, bufferu a pozície
+            const int windowWidth = 60;
+            const int windowHeight = 30;
+            Console.WindowWidth = windowWidth;
+            Console.WindowHeight = windowHeight;
+            // Buffer nastavíme o niečo širší, ak je potrebné
+            Console.SetBufferSize(windowWidth, windowHeight);
+            Console.SetWindowPosition(0, 0);
+
             Game hra = new Game();
             hra.Run();
         }
@@ -17,13 +26,13 @@ namespace SnakeGame
     {
         private const int WindowHeight = 30;
         private const int WindowWidth = 60;
+        // Každá bunka je 2 znaky široká – hracie pole má cellWidth = WindowWidth/2
         private int cellWidth;
         private int cellHeight;
 
         private Snake snake;
         private Berry berry;
         private bool isGameOver;
-        private int score;
         private string currentDirection;
         private Random random;
         private Renderer renderer;
@@ -31,11 +40,8 @@ namespace SnakeGame
 
         public Game()
         {
-            // Nastavenie konzolového okna
-            Console.WindowHeight = WindowHeight;
-            Console.WindowWidth = WindowWidth;
-            cellWidth = Console.WindowWidth / 2;   // počet buniek horizontálne
-            cellHeight = Console.WindowHeight;       // počet buniek vertikálne
+            cellWidth = Console.WindowWidth / 2; // Napr. 60/2 = 30 buniek
+            cellHeight = Console.WindowHeight;     // 30 riadkov
 
             random = new Random();
             int startX = cellWidth / 2;
@@ -43,7 +49,6 @@ namespace SnakeGame
             snake = new Snake(startX, startY, ConsoleColor.Red);
             currentDirection = "RIGHT";
             berry = new Berry(random.Next(1, cellWidth - 1), random.Next(1, cellHeight - 1));
-            score = 5;
             isGameOver = false;
             renderer = new Renderer(cellWidth, cellHeight);
             inputHandler = new InputHandler();
@@ -55,23 +60,23 @@ namespace SnakeGame
             {
                 Console.Clear();
 
-                // Kontrola kolízie so stenami
+                // Kontrola kolízie s okrajmi hracieho poľa
                 if (snake.Head.X == cellWidth - 1 || snake.Head.X == 0 ||
                     snake.Head.Y == cellHeight - 1 || snake.Head.Y == 0)
                 {
                     isGameOver = true;
                 }
 
-                renderer.Render(snake, berry, score, cellWidth, cellHeight);
+                renderer.Render(snake, berry, cellWidth, cellHeight);
 
                 // Kontrola, či had zjedol bobuľu
                 if (snake.Head.X == berry.X && snake.Head.Y == berry.Y)
                 {
-                    score++;
                     snake.Grow();
                     berry.Respawn(random, cellWidth, cellHeight);
                 }
 
+                // Kontrola kolízie s vlastným telom
                 if (snake.IsSelfCollision())
                 {
                     isGameOver = true;
@@ -80,14 +85,11 @@ namespace SnakeGame
                 if (isGameOver)
                     break;
 
-                // Časovanie a spracovanie vstupu (100 ms)
+                // Časovanie a spracovanie vstupu – oneskorenie 100 ms
                 DateTime startTime = DateTime.Now;
                 bool buttonPressed = false;
-                while (true)
+                while ((DateTime.Now - startTime).TotalMilliseconds < 100)
                 {
-                    DateTime currentTime = DateTime.Now;
-                    if (currentTime.Subtract(startTime).TotalMilliseconds > 100)
-                        break;
                     if (Console.KeyAvailable)
                     {
                         ConsoleKeyInfo keyInfo = Console.ReadKey(true);
@@ -100,9 +102,10 @@ namespace SnakeGame
                     }
                 }
 
-                // Aktualizácia hada
-                snake.AddBodySegment(); // uloženie aktuálnej pozície hlavy do tela
+                // Aktualizácia hada: uloženie aktuálnej pozície hlavy do tela
+                snake.AddBodySegment();
 
+                // Pohyb hlavy podľa aktuálneho smeru
                 switch (currentDirection)
                 {
                     case "UP":
@@ -119,14 +122,14 @@ namespace SnakeGame
                         break;
                 }
 
-                // Odstránenie chvosta, ak had neporastie
-                snake.Trim(score);
+                // Ak had nie je rastúc, odstráň starý chvost
+                snake.Trim();
             }
 
+            // Game over – vyčistenie obrazovky a zobrazenie hlásenia
             Console.Clear();
             Console.SetCursorPosition(cellWidth, cellHeight / 2);
-            Console.WriteLine("Game over, Score: " + score);
-            Console.SetCursorPosition(cellWidth, cellHeight / 2 + 1);
+            Console.WriteLine("Game over");
             Console.ReadKey();
         }
     }
@@ -149,12 +152,13 @@ namespace SnakeGame
 
         public void Grow()
         {
-            // Pri zjedení bobule sa chvost neodstraňuje
+            // Pri zjedení bobule sa chvost neodstraňuje – skip Trim
         }
 
-        public void Trim(int desiredLength)
+        public void Trim()
         {
-            if (Body.Count > desiredLength)
+            // Nastavíme pevný počet segmentov (napr. 5) pre základnú dĺžku hada
+            if (Body.Count > 5)
                 Body.RemoveAt(0);
         }
 
@@ -205,8 +209,6 @@ namespace SnakeGame
     {
         private int cellWidth;
         private int cellHeight;
-        private const int offsetX = 2; // Pridaný horizontálny posun (offset) o 2 znaky
-        private const int offsetY = 0; // Vertikálny offset, ak je potrebný
 
         public Renderer(int cellWidth, int cellHeight)
         {
@@ -214,12 +216,12 @@ namespace SnakeGame
             this.cellHeight = cellHeight;
         }
 
-        public void Render(Snake snake, Berry berry, int score, int boardWidth, int boardHeight)
+        // Vykreslí okraje, hada a bobuľu
+        public void Render(Snake snake, Berry berry, int boardWidth, int boardHeight)
         {
             DrawBorders(boardWidth, boardHeight);
             DrawSnake(snake);
             DrawBerry(berry);
-            DrawScore(score, boardWidth);
         }
 
         void DrawBorders(int boardWidth, int boardHeight)
@@ -227,25 +229,25 @@ namespace SnakeGame
             // Horný okraj
             for (int i = 0; i < boardWidth; i++)
             {
-                Console.SetCursorPosition(offsetX + i * 2, offsetY);
+                Console.SetCursorPosition(i * 2, 0);
                 Console.Write("██");
             }
             // Spodný okraj
             for (int i = 0; i < boardWidth; i++)
             {
-                Console.SetCursorPosition(offsetX + i * 2, boardHeight - 1 + offsetY);
+                Console.SetCursorPosition(i * 2, boardHeight - 1);
                 Console.Write("██");
             }
             // Ľavý okraj
             for (int i = 0; i < boardHeight; i++)
             {
-                Console.SetCursorPosition(offsetX, i + offsetY);
+                Console.SetCursorPosition(0, i);
                 Console.Write("██");
             }
             // Pravý okraj
             for (int i = 0; i < boardHeight; i++)
             {
-                Console.SetCursorPosition(offsetX + (boardWidth - 1) * 2, i + offsetY);
+                Console.SetCursorPosition((boardWidth - 1) * 2, i);
                 Console.Write("██");
             }
         }
@@ -255,26 +257,19 @@ namespace SnakeGame
             Console.ForegroundColor = ConsoleColor.Green;
             foreach (var segment in snake.Body)
             {
-                Console.SetCursorPosition(offsetX + segment.X * 2, segment.Y + offsetY);
+                Console.SetCursorPosition(segment.X * 2, segment.Y);
                 Console.Write("██");
             }
             Console.ForegroundColor = snake.Head.Color;
-            Console.SetCursorPosition(offsetX + snake.Head.X * 2, snake.Head.Y + offsetY);
+            Console.SetCursorPosition(snake.Head.X * 2, snake.Head.Y);
             Console.Write("██");
         }
 
         void DrawBerry(Berry berry)
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.SetCursorPosition(offsetX + berry.X * 2, berry.Y + offsetY);
+            Console.SetCursorPosition(berry.X * 2, berry.Y);
             Console.Write("██");
-        }
-
-        void DrawScore(int score, int boardWidth)
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.SetCursorPosition(offsetX + boardWidth * 2 + 2, 1 + offsetY);
-            Console.Write("Score: " + score);
         }
     }
 
@@ -285,23 +280,20 @@ namespace SnakeGame
             switch (key)
             {
                 case ConsoleKey.UpArrow:
-                    if (currentDirection != "DOWN")
-                        return "UP";
+                    if (currentDirection != "DOWN") return "UP";
                     break;
                 case ConsoleKey.DownArrow:
-                    if (currentDirection != "UP")
-                        return "DOWN";
+                    if (currentDirection != "UP") return "DOWN";
                     break;
                 case ConsoleKey.LeftArrow:
-                    if (currentDirection != "RIGHT")
-                        return "LEFT";
+                    if (currentDirection != "RIGHT") return "LEFT";
                     break;
                 case ConsoleKey.RightArrow:
-                    if (currentDirection != "LEFT")
-                        return "RIGHT";
+                    if (currentDirection != "LEFT") return "RIGHT";
                     break;
             }
             return currentDirection;
         }
     }
 }
+
